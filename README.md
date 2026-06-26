@@ -22,6 +22,12 @@ STEP 2
 - Opening the browser every time, assigning yourself as a reviewer if you aren't already, and clicking the **Approve** button breaks your train of thought and stops your hands — a waste of time and attention.
 - I wanted something that just does the approve, straight from the CLI or Raycast.
 
+## Features
+
+- Approve a PR straight from the CLI or Raycast — just point it at the PR.
+- Auto-assigns you as a reviewer if you aren't assigned yet.
+- Warns and prevents approval in risky cases, such as a draft PR or failing CI.
+
 ## Safety first
 
 Approve is a hard-to-undo, outward-facing action, so safety comes first:
