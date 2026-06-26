@@ -64,9 +64,38 @@ pr-approve --gui <URL>              # 確認を macOS ダイアログで（Rayca
 
 > Raycast は最小 PATH でスクリプトを起動することがあるため、`approve-pr.sh` 内で `gh` / `jq` / `pr-approve` の場所を PATH に通している。環境（Homebrew のパス等）に合わせて調整のこと。
 
+> **`gh が認証されていません` と出たら** → Raycast は `~/.zshrc` を読まないので、`GH_TOKEN` 環境変数による認証は効かない。下の「トラブルシューティング」を参照。
+
 ## 設計メモ
 
 「異常検知」には2種類ある。**既知の異常**（マージ済み・自分が作者・CI 失敗 など、事前にルール化できるもの）は pre-flight で機械的に弾ける。一方、**未知の異常**（タイトルに `[DO NOT MERGE]`、説明に「レビュー待って」等の、ルール化していない “なんか変”）は機械では拾えない。だからこそ approve の直前に**人間がサマリを見て確認する**ステップを最後の砦として残している。
+
+## トラブルシューティング
+
+### Raycast で「gh が認証されていません」と出る
+
+**原因**: Raycast はスクリプトをログインシェルとして起動しないため、`~/.zshrc` などで `export GH_TOKEN=...` して gh を認証している場合、その環境変数が渡らず gh が未認証になる。
+
+**確認**: `gh auth status` の末尾が `(GH_TOKEN)` なら環境変数依存、`(keyring)` や `(oauth_token)` なら gh のストアに保存済み（＝Raycast でも使える）。
+
+**解決**: gh の認証ストア（macOS なら keychain）に認証情報を永続化する。
+
+```bash
+# 方法1: いま使っている GH_TOKEN をそのままストアに保存（ブラウザ不要）
+TOKEN="$GH_TOKEN"
+( unset GH_TOKEN GITHUB_TOKEN; printf '%s' "$TOKEN" | gh auth login --with-token )
+
+# 方法2: ブラウザでログインし直す
+unset GH_TOKEN GITHUB_TOKEN      # set されていると gh auth login が拒否するため
+gh auth login
+```
+
+保存後に `gh auth status` が `(keyring)` 等になっていれば、Raycast からも認証が通る。
+（`GH_TOKEN` が set されているターミナルでは引き続き環境変数が優先されるので、ターミナル側の挙動は変わらない。）
+
+### `setlocale: LC_ALL: cannot change locale` という警告が出る
+
+Raycast が非標準のロケール（例: `en-JP-u-ca-gregory-...`）を渡してくるのが原因。`raycast/approve-pr.sh` 内で `LC_ALL` / `LANG` を上書きして抑止している。実害はない。
 
 ## ライセンス
 
