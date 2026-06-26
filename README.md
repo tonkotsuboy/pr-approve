@@ -1,25 +1,156 @@
 # pr-approve
 
-> GitHub の Pull Request を、安全チェック（pre-flight）と確認のうえでサクッと approve する CLI。
+> Approve GitHub PRs from your terminal or Raycast — with pre-flight safety checks and a final confirmation.
+
+**English** | [日本語](#日本語)
+
+Opening the browser just to click **Approve** on a PR you've already decided to merge is tedious. `pr-approve` wraps the [GitHub CLI (`gh`)](https://cli.github.com/) to **add yourself as a reviewer (if needed) and approve** in one step.
+
+Approve is a hard-to-undo, outward-facing action, so safety comes first:
+
+- **Pre-flight checks** mechanically exclude PRs that shouldn't be approved.
+- A **summary + confirmation** is shown right before approving (terminal `y/n`, or a native macOS dialog in non-interactive environments like Raycast).
+- It never judges the PR's content — it just executes the PRs **you** decided are OK to approve.
+
+## Requirements
+
+- [GitHub CLI (`gh`)](https://cli.github.com/), authenticated (`gh auth login`). Approvals and reviewer requests are made **as the authenticated `gh` user**.
+- [`jq`](https://jqlang.github.io/jq/)
+- macOS — only for the `--gui` confirmation dialog (`osascript`). Without `--gui`, macOS isn't required.
+
+## Installation
+
+### Homebrew (recommended)
+
+```bash
+brew install tonkotsuboy/tap/pr-approve
+```
+
+This also installs the `gh` and `jq` dependencies.
+
+### Manual
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tonkotsuboy/pr-approve/main/pr-approve -o ~/.local/bin/pr-approve
+chmod +x ~/.local/bin/pr-approve
+```
+
+## Usage
+
+```bash
+pr-approve <PR_URL>                 # one PR
+pr-approve <URL1> <URL2> ...        # multiple at once
+pr-approve 123 124                  # bare numbers work when run inside the repo
+pr-approve --gui <URL>              # confirm via a macOS dialog (for Raycast)
+```
+
+## How it works
+
+### Pre-flight checks
+
+A PR is skipped (with a reason) if any of these hold:
+
+| Condition | Why |
+| :--- | :--- |
+| Already merged / closed | Can't be approved |
+| You are the author | GitHub doesn't let you approve your own PR |
+| You already approved it | A second approval is meaningless |
+| CI failing / pending | Maybe not ready to approve yet |
+| Changes requested by others | Same as above |
+
+### Flow
+
+1. For a PR that passes pre-flight, add yourself as a reviewer if you aren't requested yet
+   (if GitHub rejects requesting a review from yourself, it stops and asks).
+2. Show a summary (number, title, author, files changed, CI status, reviewer state).
+3. On confirmation (`y/n` or a macOS dialog), run `gh pr review --approve` (no comment).
+
+## Language
+
+Messages are shown in **English by default**, or in **Japanese** when your locale is `ja*` (e.g. `LANG=ja_JP.UTF-8`). Force a specific language with `PR_APPROVE_LANG=en` or `PR_APPROVE_LANG=ja`.
+
+## Raycast
+
+Register [`raycast/approve-pr.sh`](raycast/approve-pr.sh) as a Raycast Script Command to approve a PR from Raycast by passing its URL. The confirmation appears as a macOS dialog, so it works even though Raycast is non-interactive.
+
+1. Put `raycast/approve-pr.sh` in a directory (e.g. `~/raycast-scripts`).
+2. Raycast → Settings → Extensions → Script Commands → **Add Directories**, and select that directory.
+3. Search **Approve PR** in Raycast → enter the PR URL → run.
+
+> Raycast may launch scripts with a minimal `PATH`, so `approve-pr.sh` adds `gh` / `jq` / `pr-approve` locations to `PATH`. Adjust for your environment (e.g. Homebrew paths). For Japanese messages from Raycast, uncomment `export PR_APPROVE_LANG=ja` inside the script.
+
+## Design note
+
+There are two kinds of "anomaly detection". **Known anomalies** (already merged, you're the author, CI failing, …) can be ruled out mechanically by the pre-flight checks. **Unknown anomalies** (a `[DO NOT MERGE]` in the title, a "please wait" in the description — things you never coded a rule for) can't be caught by a machine. That's exactly why a **human confirmation step right before approving** is kept as the last line of defense.
+
+## Troubleshooting
+
+### Raycast says "gh is not authenticated"
+
+**Cause**: Raycast doesn't launch scripts as a login shell, so if you authenticate `gh` via a `GH_TOKEN` environment variable exported in `~/.zshrc`, that token isn't available and `gh` appears unauthenticated.
+
+**Check**: if `gh auth status` ends with `(GH_TOKEN)`, you rely on the env var; `(keyring)` or `(oauth_token)` means it's stored in gh's own store (which Raycast can use).
+
+**Fix**: persist credentials to gh's store (the macOS keychain).
+
+```bash
+# Option 1: store your current GH_TOKEN into gh's store (no browser)
+TOKEN="$GH_TOKEN"
+( unset GH_TOKEN GITHUB_TOKEN; printf '%s' "$TOKEN" | gh auth login --with-token )
+
+# Option 2: log in via browser
+unset GH_TOKEN GITHUB_TOKEN      # gh auth login refuses while this is set
+gh auth login
+```
+
+After this, `gh auth status` should show `(keyring)` and Raycast will authenticate.
+(In a terminal where `GH_TOKEN` is still set, the env var keeps taking precedence, so terminal behavior is unchanged.)
+
+### `setlocale: LC_ALL: cannot change locale` warning
+
+Raycast passes a non-standard locale (e.g. `en-JP-u-ca-gregory-...`). `raycast/approve-pr.sh` overrides `LC_ALL` / `LANG` to suppress the warning. It's harmless.
+
+## License
+
+[MIT](LICENSE)
+
+---
+
+<a id="日本語"></a>
+
+# pr-approve（日本語）
+
+[English](#pr-approve) | **日本語**
+
+> GitHub の Pull Request を、ターミナルや Raycast から、安全チェック（pre-flight）と確認のうえで approve する CLI。
 
 「ただ approve すればいいだけの PR」のために、毎回ブラウザを開いて画面遷移して承認ボタンを押すのは面倒。`pr-approve` は [GitHub CLI (`gh`)](https://cli.github.com/) をラップして、**必要ならレビュワーに自分を追加 → approve** までを一発で行う。
 
 approve は取り消しにくい外向きの操作なので、安全性を最優先している:
 
-- **pre-flight チェック**で「approve すべきでない PR」を機械的に除外する
-- approve の直前に**サマリを出して確認**を取る（ターミナルは `y/n`、Raycast 等の非対話環境では macOS のダイアログ）
-- PR の中身の良し悪しは判断しない。**あなたが「承認 OK」と判断した PR を実行するだけ**の薄い実行係
+- **pre-flight チェック**で「approve すべきでない PR」を機械的に除外する。
+- approve の直前に**サマリを出して確認**を取る（ターミナルは `y/n`、Raycast 等の非対話環境では macOS のダイアログ）。
+- PR の中身の良し悪しは判断しない。**あなたが「承認 OK」と判断した PR を実行するだけ**の薄い実行係。
 
 ## 必要なもの
 
-- [GitHub CLI (`gh`)](https://cli.github.com/) — 認証済みであること（`gh auth login`）。approve / レビュワー追加は `gh` の**認証ユーザー本人**として行われる
+- [GitHub CLI (`gh`)](https://cli.github.com/) — 認証済みであること（`gh auth login`）。approve / レビュワー追加は `gh` の**認証ユーザー本人**として行われる。
 - [`jq`](https://jqlang.github.io/jq/)
-- macOS — `--gui` の確認ダイアログは `osascript` を使う（`--gui` を使わなければ macOS でなくても動く）
+- macOS — `--gui` の確認ダイアログ（`osascript`）にのみ必要。`--gui` を使わなければ macOS でなくても動く。
 
 ## インストール
 
+### Homebrew（推奨）
+
 ```bash
-# PATH の通ったディレクトリに置いて実行権限を付ける
+brew install tonkotsuboy/tap/pr-approve
+```
+
+`gh` / `jq` も依存として同時にインストールされる。
+
+### 手動
+
+```bash
 curl -fsSL https://raw.githubusercontent.com/tonkotsuboy/pr-approve/main/pr-approve -o ~/.local/bin/pr-approve
 chmod +x ~/.local/bin/pr-approve
 ```
@@ -50,21 +181,23 @@ pr-approve --gui <URL>              # 確認を macOS ダイアログで（Rayca
 ### approve までの流れ
 
 1. pre-flight を通過した PR について、自分がレビュワーに未指名なら自分を追加する
-   （GitHub が「自分自身へのレビュー依頼」を弾いた場合は停止して確認する）
-2. PR のサマリ（番号・タイトル・作者・変更ファイル数・CI 状況・reviewer 状態）を表示
-3. 確認（`y/n` または macOS ダイアログ）で OK なら `gh pr review --approve` を実行（コメントなし）
+   （GitHub が「自分自身へのレビュー依頼」を弾いた場合は停止して確認する）。
+2. PR のサマリ（番号・タイトル・作者・変更ファイル数・CI 状況・reviewer 状態）を表示。
+3. 確認（`y/n` または macOS ダイアログ）で OK なら `gh pr review --approve` を実行（コメントなし）。
+
+## 言語
+
+メッセージは**既定で英語**。ロケールが `ja*`（例: `LANG=ja_JP.UTF-8`）のときは**日本語**になる。`PR_APPROVE_LANG=en` / `PR_APPROVE_LANG=ja` で明示指定も可能。
 
 ## Raycast から使う
 
 このリポジトリの [`raycast/approve-pr.sh`](raycast/approve-pr.sh) を Raycast の Script Command として登録すると、Raycast から PR URL を渡して approve できる。確認は macOS ダイアログで出るので、非対話でも安全。
 
-1. `raycast/approve-pr.sh` を任意のディレクトリ（例: `~/raycast-scripts`）に置く
-2. Raycast → Settings → Extensions → Script Commands → **Add Directories** でそのディレクトリを追加
-3. Raycast 検索で **Approve PR** → PR URL を入力して実行
+1. `raycast/approve-pr.sh` を任意のディレクトリ（例: `~/raycast-scripts`）に置く。
+2. Raycast → Settings → Extensions → Script Commands → **Add Directories** でそのディレクトリを追加。
+3. Raycast 検索で **Approve PR** → PR URL を入力して実行。
 
-> Raycast は最小 PATH でスクリプトを起動することがあるため、`approve-pr.sh` 内で `gh` / `jq` / `pr-approve` の場所を PATH に通している。環境（Homebrew のパス等）に合わせて調整のこと。
-
-> **`gh が認証されていません` と出たら** → Raycast は `~/.zshrc` を読まないので、`GH_TOKEN` 環境変数による認証は効かない。下の「トラブルシューティング」を参照。
+> Raycast は最小 PATH でスクリプトを起動することがあるため、`approve-pr.sh` 内で `gh` / `jq` / `pr-approve` の場所を PATH に通している。環境（Homebrew のパス等）に合わせて調整のこと。Raycast から日本語メッセージにしたい場合は、スクリプト内の `export PR_APPROVE_LANG=ja` をコメント解除する。
 
 ## 設計メモ
 

@@ -1,21 +1,35 @@
 #!/usr/bin/env bash
-# pr-approve — 指定された GitHub PR を「必要ならレビュワーに自分を追加 → approve」する。
+# pr-approve — Approve a GitHub PR (adding yourself as a reviewer if needed) after pre-flight checks.
+#   指定された GitHub PR を「必要ならレビュワーに自分を追加 → approve」する（pre-flight チェック付き）。
 #
-# 設計思想:
-#   approve は取り消しにくい外向きアクション。だから「既知の異常」は pre-flight で機械的に
-#   弾き、最後に確認（ターミナルは y/n、Raycast 等は GUI ダイアログ）を出して、人間（あなた）
-#   自身を最終チェッカーにする。PR の中身の良し悪しは判断しない。人間が「承認OK」と判断して
-#   渡した PR を実行するだけ。
+# Approve is a hard-to-undo, outward-facing action, so safety comes first:
+#   - pre-flight checks mechanically exclude PRs that should not be approved
+#   - a summary + confirmation is shown right before approving (terminal y/n, or a macOS dialog with --gui)
+#   - it never judges the PR's content; it just executes what you decided is OK to approve
+#
+# Messages are shown in English by default, or in Japanese when the locale is ja* or PR_APPROVE_LANG=ja.
+# メッセージは既定で英語。ロケールが ja* または PR_APPROVE_LANG=ja のとき日本語。
 #
 # usage:
 #   pr-approve [--gui] <PR_URL_or_number> [more PRs...]
-#   例) pr-approve https://github.com/OWNER/REPO/pull/123
-#       pr-approve 3965 3966              # リポジトリ内で実行するなら番号だけでも可
-#       pr-approve --gui <URL>            # 確認を macOS ダイアログで（Raycast から呼ぶ用）
 
 set -uo pipefail
 
-# ── フラグ解釈（--gui = 確認を GUI ダイアログにする）──
+# ── Language selection: PR_APPROVE_LANG > locale > en ──
+case "${PR_APPROVE_LANG:-}" in
+  ja) _lang=ja ;;
+  en) _lang=en ;;
+  *)
+    case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in
+      ja_* | ja.* | ja) _lang=ja ;;
+      *) _lang=en ;;
+    esac
+    ;;
+esac
+# t <english> <japanese> — emit the message in the selected language (no trailing newline)
+t() { if [ "$_lang" = ja ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
+
+# ── Flags (--gui = confirm via a macOS dialog instead of a terminal y/n) ──
 GUI=0
 args=()
 for a in "$@"; do
@@ -27,32 +41,44 @@ done
 set -- ${args[@]+"${args[@]}"}
 
 if [ "$#" -eq 0 ]; then
-  cat >&2 <<'USAGE'
+  if [ "$_lang" = ja ]; then
+    cat >&2 <<'USAGE'
 usage: pr-approve [--gui] <PR_URL_or_number> [more PRs...]
   例) pr-approve https://github.com/OWNER/REPO/pull/123
-      pr-approve 3965 3966
+      pr-approve 123 124
       pr-approve --gui <URL>      # 確認を macOS ダイアログで（Raycast 用）
 USAGE
+  else
+    cat >&2 <<'USAGE'
+usage: pr-approve [--gui] <PR_URL_or_number> [more PRs...]
+  e.g.) pr-approve https://github.com/OWNER/REPO/pull/123
+        pr-approve 123 124
+        pr-approve --gui <URL>    # confirm via a macOS dialog (for Raycast)
+USAGE
+  fi
   exit 1
 fi
 
-# ── 確認関数: GUI なら osascript ダイアログ、ターミナルなら read。yes で 0 を返す ──
-# $1 = ダイアログ本文（GUI用・複数行可） / $2 = ターミナル用の短いプロンプト
+# ── confirm: GUI uses an osascript dialog, terminal uses read. returns 0 for yes ──
+# $1 = dialog body (GUI, multi-line OK) / $2 = short prompt (terminal)
 confirm() {
   if [ "$GUI" -eq 1 ]; then
     local res
-    res=$(osascript - "$1" <<'APPLESCRIPT' 2>/dev/null
+    res=$(osascript - "$1" "$(t "Approve" "approve")" "$(t "Cancel" "キャンセル")" <<'APPLESCRIPT' 2>/dev/null
 on run argv
+  set msg to item 1 of argv
+  set okBtn to item 2 of argv
+  set cancelBtn to item 3 of argv
   try
-    display dialog (item 1 of argv) buttons {"キャンセル", "approve"} default button "approve" with title "pr-approve" with icon note
-    return "approve"
+    display dialog msg buttons {cancelBtn, okBtn} default button okBtn with title "pr-approve" with icon note
+    return "ok"
   on error number -128
     return "cancel"
   end try
 end run
 APPLESCRIPT
 )
-    [ "$res" = "approve" ]
+    [ "$res" = "ok" ]
   else
     printf "  %s [y/N]: " "$2"
     local ans; read -r ans </dev/tty
@@ -60,17 +86,17 @@ APPLESCRIPT
   fi
 }
 
-# 依存・認証チェック
+# Dependencies & auth
 for cmd in gh jq; do
-  command -v "$cmd" >/dev/null 2>&1 || { echo "必要なコマンドが見つかりません: $cmd" >&2; exit 1; }
+  command -v "$cmd" >/dev/null 2>&1 || { echo "$(t "Required command not found" "必要なコマンドが見つかりません"): $cmd" >&2; exit 1; }
 done
 if ! gh auth status >/dev/null 2>&1; then
-  echo "gh が認証されていません。'gh auth login' を実行してください。" >&2
+  echo "$(t "gh is not authenticated. Run 'gh auth login'." "gh が認証されていません。'gh auth login' を実行してください。")" >&2
   exit 1
 fi
 
 me=$(gh api user --jq .login)
-echo "認証ユーザー: $me"
+echo "$(t "Authenticated user" "認証ユーザー"): $me"
 
 approved=0; skipped=0; failed=0
 
@@ -82,7 +108,7 @@ for pr in "$@"; do
   info=$(gh pr view "$pr" \
     --json number,title,url,author,state,isDraft,reviewDecision,latestReviews,reviewRequests,changedFiles 2>&1)
   if [ $? -ne 0 ]; then
-    echo "  ⚠ PR 情報を取得できませんでした:"
+    echo "  ⚠ $(t "Failed to fetch PR info:" "PR 情報を取得できませんでした:")"
     echo "$info" | sed 's/^/      /'
     failed=$((failed + 1)); continue
   fi
@@ -100,79 +126,80 @@ for pr in "$@"; do
   amReviewer=$(jq -r --arg me "$me" \
     '[.reviewRequests[] | select(.__typename=="User" and .login==$me)] | length' <<<"$info")
 
-  # ── pre-flight チェック（1 つでも該当したら approve せず除外）──
+  # ── pre-flight checks (skip & report if any matches) ──
   if [ "$state" != "OPEN" ]; then
-    echo "  ⏭ スキップ: 既に ${state}（OPEN でない）"; skipped=$((skipped + 1)); continue
+    echo "  ⏭ $(t "Skip: already ${state} (not OPEN)" "スキップ: 既に ${state}（OPEN でない）")"; skipped=$((skipped + 1)); continue
   fi
   if [ "$author" = "$me" ]; then
-    echo "  ⏭ スキップ: 自分が作者（approve 不可）"; skipped=$((skipped + 1)); continue
+    echo "  ⏭ $(t "Skip: you are the author (cannot approve)" "スキップ: 自分が作者（approve 不可）")"; skipped=$((skipped + 1)); continue
   fi
   if [ "$myApproved" -gt 0 ]; then
-    echo "  ⏭ スキップ: 既に自分が approve 済み"; skipped=$((skipped + 1)); continue
+    echo "  ⏭ $(t "Skip: you already approved this PR" "スキップ: 既に自分が approve 済み")"; skipped=$((skipped + 1)); continue
   fi
   if [ "$othersChanges" -gt 0 ]; then
-    echo "  ⏭ スキップ: 他者が changes を要求中"; skipped=$((skipped + 1)); continue
+    echo "  ⏭ $(t "Skip: changes requested by someone else" "スキップ: 他者が changes を要求中")"; skipped=$((skipped + 1)); continue
   fi
 
-  # CI 判定（gh pr checks の終了コード: 0=pass / 1=fail / 8=pending）
+  # CI status (gh pr checks exit codes: 0=pass / 1=fail / 8=pending)
   ci_out=$(gh pr checks "$pr" 2>&1); ci_exit=$?
   if grep -qiE 'no checks' <<<"$ci_out"; then
-    ci_label="チェックなし"
+    ci_label="$(t "no checks" "チェックなし")"
   elif [ "$ci_exit" -eq 0 ]; then
     ci_label="✓"
   elif [ "$ci_exit" -eq 8 ]; then
-    echo "  ⏭ スキップ: CI が pending/進行中"; skipped=$((skipped + 1)); continue
+    echo "  ⏭ $(t "Skip: CI is pending/in progress" "スキップ: CI が pending/進行中")"; skipped=$((skipped + 1)); continue
   else
-    echo "  ⏭ スキップ: CI に失敗があります"
+    echo "  ⏭ $(t "Skip: CI has failures" "スキップ: CI に失敗があります")"
     echo "$ci_out" | grep -vE '^[[:space:]]*$' | sed 's/^/      /'
     skipped=$((skipped + 1)); continue
   fi
 
-  # ── アサイン判定（User かつ login==me が reviewRequests にいなければ追加）──
-  # 注: reviewRequests にはチーム（__typename=="Team"）も入る。それは「自分が個別に指名された」には当たらない。
-  reviewer_label="既に自分が指名済み"
+  # ── reviewer assignment (add yourself if not already requested as a User) ──
+  # Note: reviewRequests can contain Teams (__typename=="Team"); that is not "you were individually requested".
+  reviewer_label="$(t "already requested" "既に自分が指名済み")"
   if [ "$amReviewer" -eq 0 ]; then
     if gh pr edit "$pr" --add-reviewer "$me" >/dev/null 2>&1; then
-      reviewer_label="追加済み"
+      reviewer_label="$(t "added" "追加済み")"
     else
-      # GitHub は「自分自身をレビュワーにリクエスト」を弾くことがある。approve はレビュワーでなくても可能。
-      echo "  ⚠ レビュワー追加に失敗（自分自身のリクエストが弾かれた可能性）"
-      if confirm "レビュワー追加に失敗しました（自分自身のリクエストが弾かれた可能性）。
+      # GitHub may reject requesting a review from yourself. Approving does not require being a reviewer.
+      echo "  ⚠ $(t "Failed to add you as a reviewer (GitHub may reject self-requests)" "レビュワー追加に失敗（自分自身のリクエストが弾かれた可能性）")"
+      if confirm "$(t "Failed to add you as a reviewer (GitHub may reject self-requests)." "レビュワー追加に失敗しました（自分自身のリクエストが弾かれた可能性）。")
 
-#${number} 「${title}」
-approve に進みますか？" "approve に進みますか？"; then
-        reviewer_label="追加できず（approve のみ）"
+#${number} \"${title}\"
+$(t "Proceed to approve?" "approve に進みますか？")" "$(t "Proceed to approve?" "approve に進みますか？")"; then
+        reviewer_label="$(t "not added (approve only)" "追加できず（approve のみ）")"
       else
-        echo "  ⏭ スキップ"; skipped=$((skipped + 1)); continue
+        echo "  ⏭ $(t "Skipped" "スキップ")"; skipped=$((skipped + 1)); continue
       fi
     fi
   fi
 
   draft_note=""; [ "$isDraft" = "true" ] && draft_note=" / ⚠draft"
 
-  # ── サマリ + 確認（ここがあなたの最終チェックポイント）──
+  # ── summary + confirmation (your final checkpoint) ──
+  files_label="$(t "${files} files changed" "変更 ${files} ファイル")"
   echo
-  echo "  #${number} 「${title}」"
-  echo "  author: ${author} / 変更 ${files} ファイル / CI ${ci_label} / reviewer: ${reviewer_label}${draft_note}"
-  if confirm "#${number} 「${title}」
-author: ${author} / 変更 ${files} ファイル / CI ${ci_label} / reviewer: ${reviewer_label}${draft_note}
+  echo "  #${number} \"${title}\""
+  echo "  author: ${author} / ${files_label} / CI ${ci_label} / reviewer: ${reviewer_label}${draft_note}"
+  if confirm "#${number} \"${title}\"
+author: ${author} / ${files_label} / CI ${ci_label} / reviewer: ${reviewer_label}${draft_note}
 
-このPRを approve しますか？" "→ approve しますか？"; then
+$(t "Approve this PR?" "このPRを approve しますか？")" "$(t "→ Approve?" "→ approve しますか？")"; then
     if gh pr review "$pr" --approve; then
-      echo "  ✅ approve しました"; approved=$((approved + 1))
+      echo "  ✅ $(t "Approved" "approve しました")"; approved=$((approved + 1))
     else
-      echo "  ❌ approve に失敗しました"; failed=$((failed + 1))
+      echo "  ❌ $(t "Failed to approve" "approve に失敗しました")"; failed=$((failed + 1))
     fi
   else
-    echo "  ⏭ スキップ"; skipped=$((skipped + 1))
+    echo "  ⏭ $(t "Skipped" "スキップ")"; skipped=$((skipped + 1))
   fi
 done
 
 echo
 echo "──────────────────────────────────────────────"
-echo "完了: approve ${approved} 件 / スキップ ${skipped} 件 / 失敗 ${failed} 件"
+echo "$(t "Done: approved ${approved} / skipped ${skipped} / failed ${failed}" "完了: approve ${approved} 件 / スキップ ${skipped} 件 / 失敗 ${failed} 件")"
 
-# GUI モードでは結果をデスクトップ通知でも知らせる（Raycast の出力ウィンドウを見なくても分かるように）
+# In GUI mode, also surface the result as a desktop notification.
 if [ "$GUI" -eq 1 ]; then
-  osascript -e "display notification \"approve ${approved} / スキップ ${skipped} / 失敗 ${failed}\" with title \"pr-approve\"" >/dev/null 2>&1 || true
+  osascript -e "display notification \"$(t "approved ${approved} / skipped ${skipped} / failed ${failed}" "approve ${approved} / スキップ ${skipped} / 失敗 ${failed}")\" with title \"pr-approve\"" >/dev/null 2>&1 || true
 fi
