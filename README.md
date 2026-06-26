@@ -6,6 +6,16 @@
 
 `pr-approve` wraps the [GitHub CLI (`gh`)](https://cli.github.com/) to **add yourself as a reviewer (if needed) and approve** a PR in one step — from your terminal or Raycast.
 
+
+STEP 1
+
+<img width="1510" height="722" alt="CleanShot 2026-06-26 at 4  30 36" src="https://github.com/user-attachments/assets/9fb283b7-6dcc-4a67-a89f-5933e445bd50" />
+
+STEP 2
+
+<img width="2116" height="1230" alt="CleanShot 2026-06-26 at 4  33 18" src="https://github.com/user-attachments/assets/e7540961-198a-4e2d-a2a8-53be57d4e6fd" />
+
+
 ## Motivation
 
 - Some PRs don't really need a close review, but they still can't be merged until someone approves them.
