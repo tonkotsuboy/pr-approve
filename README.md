@@ -81,6 +81,8 @@ Messages are shown in **English by default**, or in **Japanese** when your local
 
 Register [`raycast/approve-pr.sh`](raycast/approve-pr.sh) as a Raycast Script Command to approve a PR from Raycast by passing its URL. The confirmation appears as a macOS dialog, so it works even though Raycast is non-interactive.
 
+> **Installed via Homebrew?** The script is already bundled — run `brew info pr-approve` to see its path (`$(brew --prefix)/opt/pr-approve/share/pr-approve`) and register that directory in step 2, skipping step 1.
+
 1. Put `raycast/approve-pr.sh` in a directory (e.g. `~/raycast-scripts`).
 2. Raycast → Settings → Extensions → Script Commands → **Add Directories**, and select that directory.
 3. Search **Approve PR** in Raycast → enter the PR URL → run.

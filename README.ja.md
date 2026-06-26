@@ -81,6 +81,8 @@ pr-approve --gui <URL>              # 確認を macOS ダイアログで（Rayca
 
 このリポジトリの [`raycast/approve-pr.sh`](raycast/approve-pr.sh) を Raycast の Script Command として登録すると、Raycast から PR URL を渡して approve できる。確認は macOS ダイアログで出るので、非対話でも安全。
 
+> **Homebrew で入れた場合**、スクリプトは同梱済み。`brew info pr-approve` でパス（`$(brew --prefix)/opt/pr-approve/share/pr-approve`）を確認し、手順1を飛ばして手順2でそのディレクトリを登録すればよい。
+
 1. `raycast/approve-pr.sh` を任意のディレクトリ（例: `~/raycast-scripts`）に置く。
 2. Raycast → Settings → Extensions → Script Commands → **Add Directories** でそのディレクトリを追加。
 3. Raycast 検索で **Approve PR** → PR URL を入力して実行。
