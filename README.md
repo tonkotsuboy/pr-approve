@@ -19,7 +19,7 @@
 
 - Approve a PR straight from the CLI or Raycast — just point it at the PR.
 - Auto-assigns you as a reviewer if you aren't assigned yet.
-- Warns and prevents approval in risky cases, such as a draft PR or failing CI.
+- Blocks approval for clearly unsafe states (failing/pending CI, already merged, …) and warns on drafts so you decide at the confirmation step.
 
 
 ## Captures
