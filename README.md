@@ -7,13 +7,6 @@
 `pr-approve` wraps the [GitHub CLI (`gh`)](https://cli.github.com/) to **add yourself as a reviewer (if needed) and approve** a PR in one step — from your terminal or Raycast.
 
 
-STEP 1
-
-<img width="1510" height="722" alt="CleanShot 2026-06-26 at 4  30 36" src="https://github.com/user-attachments/assets/9fb283b7-6dcc-4a67-a89f-5933e445bd50" />
-
-STEP 2
-
-<img width="2116" height="1230" alt="CleanShot 2026-06-26 at 4  33 18" src="https://github.com/user-attachments/assets/e7540961-198a-4e2d-a2a8-53be57d4e6fd" />
 
 
 ## Motivation
@@ -27,6 +20,24 @@ STEP 2
 - Approve a PR straight from the CLI or Raycast — just point it at the PR.
 - Auto-assigns you as a reviewer if you aren't assigned yet.
 - Warns and prevents approval in risky cases, such as a draft PR or failing CI.
+
+
+## Captures
+
+### CLI
+
+STEP 1
+
+<img width="1510" height="722" alt="CleanShot 2026-06-26 at 4  30 36" src="https://github.com/user-attachments/assets/9fb283b7-6dcc-4a67-a89f-5933e445bd50" />
+
+STEP 2
+
+<img width="2116" height="1230" alt="CleanShot 2026-06-26 at 4  33 18" src="https://github.com/user-attachments/assets/e7540961-198a-4e2d-a2a8-53be57d4e6fd" />
+
+### Raycast Script
+
+<img width="750" height="475" alt="CleanShot 2026-06-26 at 4  44 58" src="https://github.com/user-attachments/assets/c784d55f-fa19-4f62-8177-2e8b73b7c36c" />
+
 
 ## Safety first
 
