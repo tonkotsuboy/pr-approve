@@ -7,18 +7,6 @@
 `pr-approve` は [GitHub CLI (`gh`)](https://cli.github.com/) をラップして、**必要ならレビュワーに自分を追加 → approve** までを、ターミナルや Raycast から一発で行う。
 
 
-
-STEP 1
-
-<img width="1712" height="712" alt="CleanShot 2026-06-26 at 4  36 02" src="https://github.com/user-attachments/assets/400a1c57-a5be-445b-bf51-1e9fc9d94072" />
-
-
-STEP 2
-
-<img width="2116" height="1230" alt="CleanShot 2026-06-26 at 4  33 18" src="https://github.com/user-attachments/assets/e7540961-198a-4e2d-a2a8-53be57d4e6fd" />
-
-
-
 ## モチベーション
 
 - 内容を細かく見る必要はないが、approve しないとマージできない PR がある
@@ -30,6 +18,24 @@ STEP 2
 - CLIやRaycastから、PRを指定するだけでApprove可能
 - 自分がアサインされたなかったら、自動で自分をアサイン
 - Draft、CIが落ちてる場合などは、警告を出しapproveできないようにする
+
+## キャプチャー
+
+### CLI
+
+STEP 1
+
+<img width="1712" height="712" alt="CleanShot 2026-06-26 at 4  36 02" src="https://github.com/user-attachments/assets/400a1c57-a5be-445b-bf51-1e9fc9d94072" />
+
+
+STEP 2
+
+<img width="2116" height="1230" alt="CleanShot 2026-06-26 at 4  33 18" src="https://github.com/user-attachments/assets/e7540961-198a-4e2d-a2a8-53be57d4e6fd" />
+
+
+### Raycast
+
+<img width="750" height="475" alt="CleanShot 2026-06-26 at 4  44 58" src="https://github.com/user-attachments/assets/854e250a-699c-4525-b828-39211f2e6adc" />
 
 ## 安全性ファースト
 
